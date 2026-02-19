@@ -1,0 +1,36 @@
+data:
+  train:
+    data: data/245_004.adj.patches.small.train.npy
+    batch_size: 16
+    num_workers: 4
+    shuffle: True
+    max_shift: 15
+    alpha_range: [0.5, 1.5]
+    crop_size: 256
+    downscale_factor2: False
+  val:
+    data: data/245_004.adj.patches.small.val.npy
+    batch_size: 4
+    num_workers: 4
+    shuffle: True
+    max_shift: 15
+    alpha_range: [0.5, 1.5]
+    crop_size: 256
+    downscale_factor2: False
+model:
+  base: 64
+  in_ch:  1
+  out_ch: 1
+  levels: 3
+  max_groups: 8
+  mid_blocks: 2
+  pad_to_multiple: False
+train:
+  epochs: 2
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  amp: True
+  grad_clip: 1.0
+  edge_w: 0.05
+  ssim_w: 0.10
+  charb_eps: 1.0e-3
