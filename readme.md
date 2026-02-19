@@ -76,19 +76,25 @@ $$\mathcal{L}_{\text{res}} = \frac{1}{N} \sum_{i=1}^{N} \sqrt{\|r_\theta^{(i)} -
 ### Edge Loss
 
 To further enhance the preservation of fine fiber structures, we introduce an edge-aware loss component. This loss encourages the network to produce residual predictions that not only minimize pixel-wise differences but also maintain sharp edges.
+
 $$\mathcal{L}_{\text{edge}} = \frac{1}{N} \sum_{i=1}^{N} \| \nabla r_\theta^{(i)} - \nabla r^{(i)} \|_1$$
+
 where $\nabla$ denotes a spatial gradient operator (e.g., Laplacian filter) applied to the residuals. By penalizing discrepancies in edge information, this loss helps the model focus on accurately reconstructing fiber boundaries and reduces blurring artifacts in the final output.
 
 ### SSIM Loss
 
 To further improve the perceptual quality of the deghosted images, we can incorporate a Structural Similarity Index Measure (SSIM) loss component. This loss encourages the network to produce outputs that are not only pixel-wise accurate but also structurally similar to the ground truth clean images.
+
 $$\mathcal{L}_{\text{SSIM}}=1-\text{SSIM}(I_{\text{clean}}, \hat{I}_{\text{clean}})$$
+
 where $\text{SSIM}$ is computed between the ground truth clean image $I_{\text{clean}}$ and the reconstructed image $\hat{I}_{\text{clean}}$. By minimizing this loss, the model is incentivized to preserve important structural features and textures in the deghosted output, leading to visually more appealing results.
 
 $$\text{SSIM}(x,y) =
 \frac{(2\mu_x \mu_y + C_1)(2\sigma_{xy} + C_2)}
 {(\mu_x^2 + \mu_y^2 + C_1)(\sigma_x^2 + \sigma_y^2 + C_2)}$$
+
 where $\mu_x$ and $\mu_y$ are the mean intensities, $\sigma_x^2$ and $\sigma_y^2$ are the variances, and $\sigma_{xy}$ is the covariance between the two images. $C_1=(k_1\,L)^2$ and $C_2=(k_2\,L)^2$ are small constants to stabilize the division.
+
 SSIM compares:
 - Luminance similarity
 - Contrast similarity
