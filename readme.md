@@ -6,7 +6,7 @@ Panoramic microscopy images generated using the Olympus Stream software may exhi
 
 This effect can be described mathematically as a linear superposition of the original image and a shifted version of itself:
 
-$$I_{\text{ghost}} = (1 - \alpha) \, I + \alpha \, \text{shift}(I),$$
+$$I_{\text{ghost}} = (1 - \alpha) \cdot I + \alpha \cdot \text{shift}(I),$$
 
 where:
 - $I$ denotes the clean image,
@@ -22,11 +22,17 @@ Residual Learning for Deghosting
 Reconstructing the clean image directly from $I_{\text{ghost}}$ is possible but suboptimal from a learning perspective. Instead, we reformulate the problem in terms of residual prediction.
 
 From the forward model, the clean image can be written as:
+
 $$I = I_{\text{ghost}} + r,$$
+
 where the residual is
+
 $$r = I - I_{\text{ghost}}.$$
+
 Substituting the ghost model yields:
+
 $$r = \alpha \left(I - \text{shift}(I)\right).$$
+
 This shows that the residual is a structured, spatially correlated signal that encodes the difference between aligned and misaligned content.
 
 Learning this residual directly offers several advantages:
@@ -36,9 +42,9 @@ Learning this residual directly offers several advantages:
 - Sharper reconstruction: Since the underlying image is already sharp, subtracting the structured residual restores edges without requiring explicit gradient constraints.
 
 Therefore, the DeGhost-UNet architecture is designed to predict the residual r, and the final reconstruction is obtained via:
-$$
-\hat{I}_{\text{clean}} = I_{\text{ghost}} + r_\theta,
-$$
+
+$$\hat{I}_{\text{clean}} = I_{\text{ghost}} + r_\theta,$$
+
 where $r_\theta$ is the network prediction.
 
 This residual formulation aligns naturally with the physics of stitching artifacts and results in improved stability, faster convergence, and better preservation of fine fiber structures compared to direct image-to-image mapping.
@@ -56,12 +62,15 @@ $$\mathcal{L}_{total} = \mathcal{L}_{\text{res}} + \lambda_{\text{edge}} \cdot \
 ### Residual Loss
 
 - MSE (not recommended)
+
 $$\mathcal{L}_{\text{res}} = \frac{1}{N} \sum_{i=1}^{N} \|r_\theta^{(i)} - r^{(i)}\|_2^2$$
 
 - MAE (recommended)
+
 $$\mathcal{L}_{\text{res}} = \frac{1}{N} \sum_{i=1}^{N} \|r_\theta^{(i)} - r^{(i)}\|_1$$
 
 - Charbonnier Loss (recommended)
+
 $$\mathcal{L}_{\text{res}} = \frac{1}{N} \sum_{i=1}^{N} \sqrt{\|r_\theta^{(i)} - r^{(i)}\|_2^2 + \epsilon^2}$$
 
 ### Edge Loss
