@@ -5,9 +5,7 @@
 Panoramic microscopy images generated using the Olympus Stream software may exhibit stitching artifacts when adjacent tiles are imperfectly aligned. These artifacts, commonly referred to as ghost artifacts, occur when overlapping regions of neighboring images are slightly mismatched and blended together. As a result, structural features—such as fiber edges in composite micrographs—appear duplicated, blurred, or spatially shifted.
 
 This effect can be described mathematically as a linear superposition of the original image and a shifted version of itself:
-$$
-I_{\text{ghost}} = (1 - \alpha)\, I + \alpha\, \text{shift}(I),
-$$
+$$I_{\text{ghost}} = (1 - \alpha)\, I + \alpha\, \text{shift}(I),$$
 where:
 - $I$ denotes the clean image,
 - $\text{shift}(I)$ represents a spatially shifted copy,
