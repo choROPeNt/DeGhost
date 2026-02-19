@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deghost"
+version = "0.1.0"
+description = "Residual U-Net based deghosting for panoramic microscopy stitching artifacts."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    { name = "Christian Düreth" }
+]
+
+dependencies = [
+    "torch>=2.1",
+    "torchvision",
+    "numpy",
+    "matplotlib",
+    "pyyaml",
+    "torchinfo",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipykernel",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
