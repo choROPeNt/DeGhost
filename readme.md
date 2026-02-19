@@ -20,17 +20,11 @@ Residual Learning for Deghosting
 Reconstructing the clean image directly from $I_{\text{ghost}}$ is possible but suboptimal from a learning perspective. Instead, we reformulate the problem in terms of residual prediction.
 
 From the forward model, the clean image can be written as:
-$$
-I = I_{\text{ghost}} + r,
-$$
+$$I = I_{\text{ghost}} + r,$$
 where the residual is
-$$
-r = I - I_{\text{ghost}}.
-$$
+$$r = I - I_{\text{ghost}}.$$
 Substituting the ghost model yields:
-$$
-r = \alpha \left(I - \text{shift}(I)\right).
-$$
+$$r = \alpha \left(I - \text{shift}(I)\right).$$
 This shows that the residual is a structured, spatially correlated signal that encodes the difference between aligned and misaligned content.
 
 Learning this residual directly offers several advantages:
