@@ -56,7 +56,7 @@ We exploit a simple UNet-Style architecture for
 
 ## Loss functions
 
-$$\mathcal{L}_{total} = \mathcal{L}_{\text{res}} + \lambda_{\text{edge}} \cdot \mathcal{L}_{\text{edge}}$$
+$$\mathcal{L}_{total} = \mathcal{L}_{\text{res}} + \lambda_{\text{edge}} \cdot \mathcal{L}_{\text{edge}} + \lambda_{\text{SSIM}} \cdot \mathcal{L}_{\text{SSIM}}$$
 
 
 ### Residual Loss
