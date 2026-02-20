@@ -5,7 +5,7 @@ data:
     num_workers: 4
     shuffle: True
     max_shift: 15
-    alpha_range: [0.5, 1.5]
+    alpha_range: [0.3, 1.0]
     crop_size: 256
     downscale_factor2: False
   val:
@@ -14,23 +14,38 @@ data:
     num_workers: 4
     shuffle: True
     max_shift: 15
-    alpha_range: [0.5, 1.5]
+    alpha_range: [0.3, 1.0]
     crop_size: 256
     downscale_factor2: False
+  test:
+    data: data/245_004.adj.test.tif
 model:
-  base: 32
+  base: 48
   in_ch:  1
   out_ch: 1
-  levels: 5
+  levels: 4
   max_groups: 8
   mid_blocks: 4
   pad_to_multiple: True
+  deep_supervision: True
 train:
-  epochs: 200
+  epochs: 300
   lr: 1.0e-3
-  weight_decay: 1.0e-4
-  amp: True
-  grad_clip: 1.0
+  weight_decay:  0.0
+  amp:  True
+  log_every:  50
+  grad_clip:  1.0
+  # loss weights
   edge_w: 0.05
-  ssim_w: 0.05
-  charb_eps: 1.0e-3
+  ssim_w:  0.10
+  charb_eps: 1.0e-4
+  # deep supervision / aux loss
+  aux_w: 0.5              # 0.0 disables aux entirely
+  aux_weights: [0.5, 0.25, 0.125]   # coarse->fine (for levels=4 => 3 aux heads)
+  aux_apply_to: "residual" # (optional) "residual" or "clean"
+  # scheduler
+  sched: "cosine"           # "cosine" or "plateau" or "none"
+  warmup_steps: 200         # cosine only
+  min_lr: 1.0e-5             # cosine only
+  plateau_patience: 10      # plateau only
+  plateau_factor: 0.5       # plateau only

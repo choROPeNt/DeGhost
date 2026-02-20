@@ -1,19 +1,23 @@
 
+from typing import Any
 from pathlib import Path
 import datetime
 import sys
 
 import torch
 import torchinfo
+import numpy as np
+
+from PIL import Image
 
 from torchinfo import summary
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 
-from src.dataset_util import make_dataloader
-from src.model import DeGhostUNet
-from src.train_util import train_deghost_residual, TrainConfig
+from deghost.dataset_util import make_dataloader
+from deghost.model import DeGhostUNet
+from deghost.train_util import train_deghost_residual, TrainConfig
 
 
 def train(config):
@@ -51,7 +55,37 @@ def train(config):
         **cfg_val,
     )
 
-    logger.info(f"created data loaders: train size {len(train_loader)}, validation size {len(val_loader)}")
+    def safe_len(ds: Any) -> int | None:
+        try:
+            return len(ds)
+        except TypeError:
+            return None
+
+    train_n = safe_len(train_loader.dataset)
+    val_n   = safe_len(val_loader.dataset)
+
+    logger.info(
+        "Created data loaders | "
+        f"Train: {train_n if train_n is not None else '?'} samples "
+        f"({len(train_loader)} batches, batch_size={train_loader.batch_size}) | "
+        f"Val: {val_n if val_n is not None else '?'} samples "
+        f"({len(val_loader)} batches, batch_size={val_loader.batch_size})"
+    )
+    cfg_test = cfg["data"].get("test")
+
+
+    if cfg_test["data"] is not None:
+        # load image
+        img = Image.open(cfg_test["data"]).convert("L")  # force grayscale
+
+        # to numpy float32 in [0,1]
+        img_np = np.array(img, dtype=np.float32) / 255.0
+
+        # to torch tensor (1,1,H,W)
+        test_image = torch.from_numpy(img_np).unsqueeze(0).unsqueeze(0)
+
+    else:
+        test_image = None
 
 
     device = (
@@ -73,7 +107,7 @@ def train(config):
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
     
-    identifier = f"lvl-{model.levels}_b-{model.base}_{timestamp}"
+    identifier = f"lvl-{cfg_model.get('levels',0)}_b-{cfg_model.get('base',0)}_{timestamp}"
 
     file_out = Path("checkpoints") / f"deghost_cnn_{identifier}.pt"
 
@@ -84,7 +118,7 @@ def train(config):
 
     cfg_train_obj = TrainConfig(**cfg_train)
     ## Training loop
-    history = train_deghost_residual(model, train_loader,val_loader, device, cfg_train_obj)
+    history = train_deghost_residual(model, train_loader,val_loader, test_image, device, cfg_train_obj)
 
     # Optional: save model + history
     torch.save({"model": model.state_dict(), "history": history}, file_out)

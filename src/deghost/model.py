@@ -71,24 +71,25 @@ class DeGhostUNet(nn.Module):
     """
     def __init__(
         self,
-        base: int = 64,
+        base: int = 32,
         in_ch: int = 1,
         out_ch: int = 1,
         levels: int = 3,
         max_groups: int = 8,
         mid_blocks: int = 2,
         pad_to_multiple: bool = False,
+        deep_supervision: bool = True,
     ):
         super().__init__()
         assert levels >= 1
         self.levels = levels
         self.pad_to_multiple = pad_to_multiple
-        self.in_ch = in_ch
-        self.base = base
-        # channel sizes per level: [base, 2base, 4base, ...]
+        self.deep_supervision = deep_supervision
+
+
         ch = [base * (2 ** i) for i in range(levels)]
 
-        # Encoder: ResBlock at each level + Downsample between levels
+        # Encoder
         self.enc_blocks = nn.ModuleList()
         self.downs = nn.ModuleList()
 
@@ -98,12 +99,11 @@ class DeGhostUNet(nn.Module):
             self.enc_blocks.append(ResBlock(ch[i], ch[i], max_groups=max_groups))
 
         # Bottleneck
-        mid = []
-        for _ in range(mid_blocks):
-            mid.append(ResBlock(ch[-1], ch[-1], max_groups=max_groups))
-        self.mid = nn.Sequential(*mid)
+        self.mid = nn.Sequential(*[
+            ResBlock(ch[-1], ch[-1], max_groups=max_groups) for _ in range(mid_blocks)
+        ])
 
-        # Decoder: Upsample + ResBlock with skip concat
+        # Decoder
         self.ups = nn.ModuleList()
         self.dec_blocks = nn.ModuleList()
 
@@ -111,7 +111,19 @@ class DeGhostUNet(nn.Module):
             self.ups.append(Upsample(ch[i + 1], ch[i]))
             self.dec_blocks.append(ResBlock(ch[i] + ch[i], ch[i], max_groups=max_groups))
 
+        # Main output head (full res)
         self.out = nn.Conv2d(ch[0], out_ch, kernel_size=1)
+
+        # NEW: auxiliary heads (one per decoder stage)
+        # dec_blocks[k] outputs ch[i] where i goes: levels-2 ... 0
+        # We'll output residuals at those scales too.
+        if self.deep_supervision:
+            self.aux_out = nn.ModuleList([
+                nn.Conv2d(ch_i, out_ch, kernel_size=1)
+                for ch_i in [ch[i] for i in reversed(range(levels - 1))]
+            ])
+        else:
+            self.aux_out = None
 
     def _pad_to(self, x, mult: int):
         B, C, H, W = x.shape
@@ -122,37 +134,55 @@ class DeGhostUNet(nn.Module):
         x = F.pad(x, (0, pad_w, 0, pad_h), mode="reflect")
         return x, (H, W)
 
-    def forward(self, ghost: torch.Tensor) -> torch.Tensor:
+    def forward(self, ghost: torch.Tensor, return_aux: bool = False):
+        """
+        Returns:
+          residual: (B,out_ch,H,W)
+          aux_residuals (optional): list of residuals at intermediate decoder scales,
+                                   ordered from coarse->fine or fine->coarse (see below)
+        """
         orig_hw = None
         if self.pad_to_multiple:
             mult = 2 ** self.levels
             ghost, orig_hw = self._pad_to(ghost, mult)
 
         skips = []
+        aux = []
 
-        # level 0
+        # Encoder
         x = self.enc_blocks[0](ghost)
         skips.append(x)
 
-        # levels 1..L-1
         for i in range(1, self.levels):
             x = self.downs[i - 1](x)
             x = self.enc_blocks[i](x)
             skips.append(x)
 
-        # bottleneck
+        # Bottleneck
         x = self.mid(x)
 
-        # decode (levels-1 up steps)
+        # Decoder
         for k in range(self.levels - 1):
-            skip = skips[-2 - k]  # corresponding encoder skip
+            skip = skips[-2 - k]
             x = self.ups[k](x, size_hw=skip.shape[-2:])
             x = self.dec_blocks[k](torch.cat([x, skip], dim=1))
+
+            if self.deep_supervision and return_aux:
+                assert self.aux_out is not None
+                aux.append(self.aux_out[k](x))
 
         residual = self.out(x)
 
         if orig_hw is not None:
             H, W = orig_hw
             residual = residual[..., :H, :W]
+            if self.deep_supervision and return_aux:
+                aux = [a[..., :H, :W] if a.shape[-2:] == (H, W) else a for a in aux]
+
+        if self.deep_supervision and return_aux:
+            # aux currently goes from coarse->fine? Actually:
+            # k=0 is first upsample (deepest)-> next scale (coarsest decoded)
+            # k increases => finer. So aux is coarse->fine already.
+            return residual, aux
 
         return residual

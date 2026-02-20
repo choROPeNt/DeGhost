@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
+from typing import Sized
 
 
 
@@ -111,7 +112,7 @@ def downscale_by2_pair(a: torch.Tensor, b: torch.Tensor) -> tuple[torch.Tensor, 
 # ----------------------------
 # Dataset
 # ----------------------------
-class PatchNPYDataset(Dataset):
+class PatchNPYDataset(Dataset, Sized):
     """
     Loads pre-extracted patches from a .npy/.npz and applies ghosting transform.
     Returns:
@@ -139,9 +140,8 @@ class PatchNPYDataset(Dataset):
             raise FileNotFoundError(self.patches_path)
 
         arr = np.load(self.patches_path, allow_pickle=False)
-        if isinstance(arr, np.lib.npyio.NpzFile):
-            key = list(arr.keys())[0]
-            arr = arr[key]
+        if hasattr(arr, "files"):
+            arr = arr[arr.files[0]]
 
         if arr.ndim == 4 and arr.shape[-1] == 1:
             arr = arr[..., 0]
@@ -274,5 +274,5 @@ def make_dataloader(
         num_workers=num_workers,
         pin_memory=pin_memory,
         persistent_workers=(persistent_workers and num_workers > 0),
-        drop_last=True,
+        drop_last=False,
     )
