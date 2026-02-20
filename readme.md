@@ -91,3 +91,10 @@ SSIM compares:
 - Contrast similarity
 - Structural similarity
 
+## HPC - TU-Dresden
+
+load the modules:
+```
+ml release/24.10 GCC/13.3.0 Python/3.12.3 CUDA/12.8.0
+```
+
