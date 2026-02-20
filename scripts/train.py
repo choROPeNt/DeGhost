@@ -10,7 +10,7 @@ from torchinfo import summary
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src import model
+
 from src.dataset_util import make_dataloader
 from src.model import DeGhostUNet
 from src.train_util import train_deghost_residual, TrainConfig
