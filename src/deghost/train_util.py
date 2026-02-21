@@ -21,7 +21,6 @@ class TrainConfig:
     lr: float = 1e-3
     weight_decay: float = 0.0
     amp: bool = True
-    log_every: int = 50
     grad_clip: float = 1.0
 
     # loss weights
@@ -36,6 +35,7 @@ class TrainConfig:
     # scheduler
     sched: str = "cosine"          # "cosine" or "plateau" or "none"
     warmup_steps: int = 500        # cosine only
+    hold_frac: float = 0.7
     min_lr: float = 1e-5           # cosine only
     plateau_patience: int = 10     # plateau only
     plateau_factor: float = 0.5    # plateau only
@@ -106,18 +106,44 @@ def train_deghost_residual(model, train_loader, val_loader,test_image, device, c
         warmup_steps = int(getattr(cfg, "warmup_steps", 0))
         min_lr = float(getattr(cfg, "min_lr", 1e-5))
 
-        def lr_lambda(step):
+        # NEW: keep LR high for most of training
+        hold_frac = float(getattr(cfg, "hold_frac", 0.7))  # e.g. 0.7 = hold 70% of (non-warmup) steps
+        # alternatively: hold_steps = int(getattr(cfg, "hold_steps", 0))
+
+        total_steps = int(total_steps)  # make sure it's an int
+        decay_steps_total = max(1, total_steps - warmup_steps)
+
+        hold_steps = int(round(hold_frac * decay_steps_total))
+        hold_steps = max(0, min(hold_steps, decay_steps_total - 1))  # keep >=1 step for cosine
+
+        # steps timeline:
+        # [0 .. warmup_steps-1] warmup
+        # [warmup_steps .. warmup_steps+hold_steps-1] hold
+        # [warmup_steps+hold_steps .. total_steps-1] cosine
+
+        min_ratio = min_lr / float(cfg.lr)
+
+        def lr_lambda(step: int) -> float:
             # step starts at 0
             if warmup_steps > 0 and step < warmup_steps:
-                return (step + 1) / warmup_steps  # linear warmup to 1.0
-            # cosine decay from 1.0 -> min_lr/lr
-            t = (step - warmup_steps) / max(1, total_steps - warmup_steps)
-            cosine = 0.5 * (1.0 + math.cos(math.pi * min(1.0, max(0.0, t))))
-            # scale so final lr = min_lr
-            return (min_lr / cfg.lr) + (1.0 - (min_lr / cfg.lr)) * cosine
+                return (step + 1) / warmup_steps  # 0->1 warmup
+
+            s = step - warmup_steps  # 0..decay_steps_total-1
+
+            # HOLD PHASE: keep at 1.0
+            if s < hold_steps:
+                return 1.0
+
+            # COSINE PHASE: decay to min_ratio
+            t = (s - hold_steps) / max(1, (decay_steps_total - hold_steps))
+            t = min(1.0, max(0.0, t))
+
+            cosine = 0.5 * (1.0 + math.cos(math.pi * t))  # 1->0
+            return min_ratio + (1.0 - min_ratio) * cosine
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lr_lambda)
         plateau_scheduler = None
+
     elif sched_kind == "plateau":
         plateau_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             opt,
@@ -202,23 +228,42 @@ def train_deghost_residual(model, train_loader, val_loader,test_image, device, c
 
                 loss = loss_res + EDGE_W * loss_edge + SSIM_W * loss_ssim + loss_aux
 
-            if use_amp:
-                scaler.scale(loss).backward()
-                if getattr(cfg, "grad_clip", 0.0) and cfg.grad_clip > 0:
-                    scaler.unscale_(opt)
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-                scaler.step(opt)
-                scaler.update()
-            else:
-                loss.backward()
-                if getattr(cfg, "grad_clip", 0.0) and cfg.grad_clip > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-                opt.step()
+                ##-------------------------
+                ## Updates
+                ##-------------------------
+                if use_amp:
+                    scaler.scale(loss).backward()
 
-            # ---- scheduler step (cosine: every step) ----
-            global_step += 1
-            if scheduler is not None and sched_kind == "cosine":
-                scheduler.step()
+                    if getattr(cfg, "grad_clip", 0.0) and cfg.grad_clip > 0:
+                        scaler.unscale_(opt)
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+
+                    # save scale before step
+                    scale_before = scaler.get_scale()
+
+                    scaler.step(opt)
+                    scaler.update()
+
+                    scale_after = scaler.get_scale()
+
+                    # only step scheduler if optimizer really stepped
+                    optimizer_stepped = scale_after >= scale_before
+
+                else:
+                    loss.backward()
+
+                    if getattr(cfg, "grad_clip", 0.0) and cfg.grad_clip > 0:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+
+                    opt.step()
+                    optimizer_stepped = True
+
+
+                # ---- scheduler step (cosine: every step) ----
+                global_step += 1
+
+                if scheduler is not None and sched_kind == "cosine" and optimizer_stepped:
+                    scheduler.step()
             # --------------------------------------------
 
             bs = ghost.size(0)
@@ -230,17 +275,6 @@ def train_deghost_residual(model, train_loader, val_loader,test_image, device, c
             tot_ssimL += float(loss_ssim.detach()) * bs
             tot_aux   += float(loss_aux.detach()) * bs
 
-            if cfg.log_every and (global_step % cfg.log_every == 0):
-                lr_now = opt.param_groups[0]["lr"]
-                print(
-                    f"epoch {epoch:03d} step {global_step:06d}  "
-                    f"lr {lr_now:.2e}  "
-                    f"loss {tot_loss/max(seen,1):.5f}  "
-                    f"res {tot_res/max(seen,1):.5f}  "
-                    f"aux {tot_aux/max(seen,1):.5f}  "
-                    f"edge {tot_edge/max(seen,1):.5f}  "
-                    f"ssimL {tot_ssimL/max(seen,1):.5f}"
-                )
 
         train_total = tot_loss / max(seen, 1)
         train_res   = tot_res / max(seen, 1)
