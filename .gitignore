@@ -1,6 +1,8 @@
 # Folders to omit
 data/
 checkpoints/
+out/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
