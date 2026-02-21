@@ -29,11 +29,10 @@ model:
   pad_to_multiple: True
   deep_supervision: True
 train:
-  epochs: 300
+  epochs: 700
   lr: 1.0e-3
   weight_decay:  0.0
   amp:  True
-  log_every:  50
   grad_clip:  1.0
   # loss weights
   edge_w: 0.05
@@ -45,7 +44,8 @@ train:
   aux_apply_to: "residual" # (optional) "residual" or "clean"
   # scheduler
   sched: "cosine"           # "cosine" or "plateau" or "none"
-  warmup_steps: 200         # cosine only
+  warmup_steps: 50         # cosine only
   min_lr: 1.0e-5             # cosine only
+  hold_frac: 0.8
   plateau_patience: 10      # plateau only
   plateau_factor: 0.5       # plateau only
