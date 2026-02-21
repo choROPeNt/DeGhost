@@ -3,6 +3,10 @@ data/
 checkpoints/
 out/
 
+# symbolic links
+data
+checkpoints
+out
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
